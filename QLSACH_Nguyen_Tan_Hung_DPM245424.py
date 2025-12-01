@@ -9,7 +9,6 @@ def get_connection():
         user="root",
         password="@HUNGVN1234",
         database="QLSach",
-
     )
 
 def check_maloai_trung(ket_noi, matheloai):
