@@ -1,6 +1,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import mysql.connector
+import pandas as pd
+from openpyxl import Workbook
 
 
 def get_connection():
@@ -24,6 +26,16 @@ def check_masach_trung(ket_noi, masach):
     con_tro.execute("SELECT COUNT(*) FROM Sach WHERE MaSach = %s", (masach,))
     result = con_tro.fetchone()[0]
     return result > 0 
+
+def check_float(V):
+    try:
+        float(V)
+        return True
+    except ValueError:
+        return False
+
+kihieu = " VND"
+
 
 # KHỞI TẠO CỬA SỔ
 root = tk.Tk()
@@ -106,11 +118,12 @@ def show_danh_sach():
         rs = contro.fetchall()
 
         tree.delete(*tree.get_children())
-
+  
         for r in rs:
             clean_row = [col if not isinstance(col, tuple) else col[0] for col in r]
+            if check_float(clean_row[3]):
+                clean_row[3] = f"{clean_row[3]:,.2f}{kihieu}"
             tree.insert("", "end", values=clean_row + ["[...]"])
-
         connect.close()
 
 
@@ -301,6 +314,9 @@ def show_danh_sach():
             connect.close()
             cuaSo.destroy()
             return
+        if check_float(row[5]):
+            row = list(row)
+            row[5] = f"{row[5]:,.2f}{kihieu}"
 
         labels = [
             "Mã sách: " + str(row[0]),
@@ -403,7 +419,7 @@ def show_ban_sach():
     bang_sach.heading("TenSach", text="Tên sách")
     bang_sach.heading("DonGia", text="Đơn giá")
     bang_sach.column("DonGia", width=80)
-    bang_sach.column("SoLuongTon", width=80)
+    bang_sach.column("SoLuongTon", width=40)
     bang_sach.pack(fill="both", expand=True)
 
 
@@ -446,6 +462,8 @@ def show_ban_sach():
         rows = contro.fetchall()
         for row in rows:
             clean = [col if not isinstance(col, tuple) else col[0] for col in row]
+            if check_float(clean[2]):
+                clean[2] = f"{clean[2]}{kihieu}"
             bang_sach.insert("", "end", values=clean)
         connect.close()
         
@@ -512,9 +530,9 @@ def show_ban_sach():
         # Tính lại tổng tiền hiện tại trong giỏ và cập nhật nhãn hiển thị
         total = 0.0
         for item in gio_hang.get_children():
-            vals = gio_hang.item(item, "values")
+            total = gio_hang.item(item, "values")
             try:
-                total += float(vals[4])
+                total += float([4])
             except Exception:
                 pass
         try:
@@ -611,14 +629,38 @@ def show_bao_cao():
     e_month = ttk.Entry(dk, width=10); e_month.pack(side="left", padx=(0,8)); e_month.insert(0, "0")
     tai_bc = ttk.Button(dk, text="Tải báo cáo")
     tai_bc.pack(side="left", padx=6)
+    excel = ttk.Button(dk, text="Xuất Excel")
+    excel.pack(side="left", padx=6)
 
     bang_doanhthu = ttk.Treeview(frame_rev, columns=("Ngay", "DoanhThu"), show="headings", height=8)
     bang_doanhthu.heading("Ngay", text="Ngày")
     bang_doanhthu.heading("DoanhThu", text="Doanh thu")
     bang_doanhthu.column("DoanhThu", anchor="e", width=140)
     bang_doanhthu.pack(fill="both", expand=True, padx=6, pady=(6,10))
+    def xuat_excel():
+        connect = get_connection()
+        contro = connect.cursor()
 
-
+        contro.execute("SELECT COUNT(*) FROM chiTietDonHang")
+        dem = contro.fetchone()[0] + 1
+        file_excel = f"BaoCaoChiTiet_{dem:03d}.xlsx"
+        try:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Báo cáo chi tiết đơn hàng"
+            chitiet="SELECT * FROM ChiTietDonHang"
+            contro.execute(chitiet)
+            rows = contro.fetchall()
+            ws.append(["Mã Đơn Hàng", "Mã Sách", "Số Lượng", "Đơn Giá"])
+            for r in rows:
+                clean_row = [col if not isinstance(col, tuple) else col[0] for col in r]
+                ws.append(clean_row)
+            wb.save(file_excel)
+            messagebox.showinfo("Thành công", f"Đã xuất báo cáo chi tiết đơn hàng ra file {file_excel}")
+        except Exception as ex:
+            messagebox.showerror("Lỗi", f"Không thể xuất báo cáo chi tiết đơn hàng: {ex}")
+        finally:
+            connect.close()
     def tai_doanh_thu():
         # Tải dữ liệu doanh thu từ DB theo năm/tháng và hiển thị trong bảng doanh thu
         for r in bang_doanhthu.get_children():
@@ -648,6 +690,7 @@ def show_bao_cao():
                 """, (year, month))
 
             for day, rev in contro.fetchall():
+                rev = f"{rev:,.2f}{kihieu}"
                 bang_doanhthu.insert("", "end", values=(str(day), rev))
         except Exception as ex:
             messagebox.showerror("Lỗi", f"Không thể tải báo cáo doanh thu: {ex}")
@@ -655,7 +698,7 @@ def show_bao_cao():
             if connect:
                 connect.close()
     tai_bc.config(command=tai_doanh_thu)
-
+    excel.config(command=xuat_excel)
     # Tồn kho --- danh sách + nút tải
     khung_kho = ttk.LabelFrame(khung, text="Báo cáo tồn kho")
     khung_kho.pack(fill="both", padx=10, pady=6, expand=True)
@@ -1057,16 +1100,18 @@ def show_thong_tin_phu():
     tai_nxb()
     tai_tl()
 
-# ===========================================================
+    
+
+
+
 # MENU
-# ===========================================================
+
 menu_bar = tk.Menu(root)
 root.config(menu=menu_bar)
 menu_bar.add_command(label="Danh Sách", command=show_danh_sach)
 menu_bar.add_command(label="Bán Sách", command=show_ban_sach)
 menu_bar.add_command(label="Báo Cáo", command=show_bao_cao)
 menu_bar.add_command(label="Thông tin Phụ", command=show_thong_tin_phu)
-
 # Hiển thị mặc định
 
 show_ban_sach()
