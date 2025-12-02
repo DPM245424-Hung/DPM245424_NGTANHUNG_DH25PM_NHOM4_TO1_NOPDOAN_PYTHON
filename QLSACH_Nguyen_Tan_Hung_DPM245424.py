@@ -556,7 +556,7 @@ def show_ban_sach():
         # Chèn chi tiết đơn hàng và giảm tồn kho cho từng mục
         for ma_sach, slm, dgm, total_item in items:
             contro.execute("INSERT INTO ChiTietDonHang (MaDonHang, MaSach, SoLuong, DonGia) VALUES (%s, %s, %s, %s)", (ma_dh, ma_sach, slm, float(dgm)))
-            # Giảm tồn kho cho sách này
+        # Giảm tồn kho cho sách này
             contro.execute("UPDATE Sach SET SoLuongTon = IFNULL(SoLuongTon, 0) - %s WHERE MaSach = %s", (slm, ma_sach))
         # Cập nhật tổng đơn hàng một lần (câu SQL này không cần tham số)
         contro.execute("UPDATE DonHang dh SET TongTien = (SELECT SUM(SoLuong * DonGia) FROM ChiTietDonHang WHERE MaDonHang = dh.MaDonHang)")
